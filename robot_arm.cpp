@@ -65,4 +65,46 @@ void setup() {
   
     lcd.print("Mode: ASL");
   }
+  void loop() {
+    if (digitalRead(modeButton) == LOW) {
+      mode = (mode + 1) % 3;
+      delay(500);
+      lcd.clear();
+      if (mode == 0) {
+        lcd.print("Mode: ASL");
+      } else if (mode == 1) {
+        lcd.print("Mode: Mirror");
+      } else if (mode == 2) {
+        lcd.print("Mode: Game");
+        userScore = 0;
+        handScore = 0;
+      }
+    }
+  
+    if (mode == 0) {
+      if (Serial.available()) {
+        char letter = Serial.read();
+        if (letter >= 'A' && letter <= 'Z') {
+          int index = letter - 'A';
+          moveServos(aslAlphabet[index]);
+          lcd.setCursor(0, 1);
+          lcd.print("Spelling: ");
+          lcd.print(letter);
+        }
+      }
+    } else if (mode == 1) {
+      if (Serial.available()) {
+        String gesture = Serial.readString();
+        if (gesture == "rock") {
+          int rockPos[7] = {90, 90, 90, 90, 90, 90, 90};
+          moveServos(rockPos);
+        } else if (gesture == "paper") {
+          int paperPos[7] = {0, 0, 0, 0, 0, 90, 90};
+          moveServos(paperPos);
+        } else if (gesture == "scissors") {
+          int scissorsPos[7] = {90, 0, 0, 90, 90, 90, 90};
+          moveServos(scissorsPos);
+        }
+      }
+    }
   
