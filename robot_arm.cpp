@@ -48,3 +48,21 @@ void moveServos(const int positions[]) {
     servo.write(positions[i]);
   }
 }
+void setup() {
+    Serial.begin(9600);
+    lcd.begin(20, 4);
+  
+    thumb.attach(servoPins[0]);
+    index.attach(servoPins[1]);
+    middle.attach(servoPins[2]);
+    ring.attach(servoPins[3]);
+    pinky.attach(servoPins[4]);
+    wrist.attach(servoPins[5]);
+    base.attach(servoPins[6]);
+  
+    pinMode(modeButton, INPUT_PULLUP);
+    pinMode(resetButton, INPUT_PULLUP);
+  
+    lcd.print("Mode: ASL");
+  }
+  
