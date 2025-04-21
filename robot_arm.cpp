@@ -107,4 +107,70 @@ void setup() {
         }
       }
     }
-  
+    else if (mode == 2) {
+        if (Serial.available()) {
+          String command = Serial.readString();
+          if (command == "reset") {
+            userScore = 0;
+            handScore = 0;
+            lcd.clear();
+            lcd.print("Mode: Game");
+          } else if (command == "rock" || command == "paper" || command == "scissors") {
+            int randomChoice = random(0, 3);
+            String handChoice = (randomChoice == 0 ? "rock" : randomChoice == 1 ? "paper" : "scissors");
+    
+            lcd.setCursor(0, 1);
+            lcd.print("Hand: ");
+            lcd.print(handChoice);
+            lcd.setCursor(0, 2);
+            lcd.print("User: ");
+            lcd.print(command);
+    
+            if (command == handChoice) {
+              lcd.setCursor(0, 3);
+              lcd.print("Result: Draw");
+            } else if ((command == "rock" && handChoice == "scissors") ||
+                       (command == "paper" && handChoice == "rock") ||
+                       (command == "scissors" && handChoice == "paper")) {
+              userScore++;
+              lcd.setCursor(0, 3);
+              lcd.print("Result: You Win");
+            } else {
+              handScore++;
+              lcd.setCursor(0, 3);
+              lcd.print("Result: Hand Wins");
+            }
+    
+            delay(2000);
+            lcd.setCursor(0, 0);
+            lcd.print("Score: You ");
+            lcd.print(userScore);
+            lcd.print(" Hand ");
+            lcd.print(handScore);
+          } else {
+            lcd.clear();
+            lcd.print("Invalid Gesture!");
+            delay(2000);
+            lcd.clear();
+            lcd.print("Mode: Game");
+          }
+    
+          if (userScore == 3 || handScore == 3) {
+            lcd.clear();
+            lcd.print((userScore == 3) ? "You Win the Game!" : "Hand Wins the Game!");
+            delay(3000);
+            userScore = 0;
+            handScore = 0;
+          }
+        }
+      }
+    
+      if (mode == 2 && digitalRead(resetButton) == LOW) {
+        userScore = 0;
+        handScore = 0;
+        lcd.clear();
+        lcd.print("Mode: Game");
+        delay(500);
+      }
+    }
+    
