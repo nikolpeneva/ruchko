@@ -15,14 +15,27 @@ def classify_gesture(landmarks):
     ring_tip = landmarks[16]
     pinky_tip = landmarks[20]
 
-    if all(landmark.y < landmarks[0].y for landmark in [index_tip, middle_tip, ring_tip, pinky_tip]):
+    thumb_base = landmarks[3]
+    index_base = landmarks[6]
+    middle_base = landmarks[10]
+    ring_base = landmarks[14]
+    pinky_base = landmarks[18]
+
+    if all(tip.y < base.y - 0.1 for tip, base in zip(
+        [index_tip, middle_tip, ring_tip, pinky_tip],
+        [index_base, middle_base, ring_base, pinky_base])):
         return "paper"
-    elif all(landmark.y > landmarks[0].y for landmark in [index_tip, middle_tip, ring_tip, pinky_tip]):
+
+    if all(tip.y > base.y + 0.1 for tip, base in zip(
+        [index_tip, middle_tip, ring_tip, pinky_tip],
+        [index_base, middle_base, ring_base, pinky_base])):
         return "rock"
-    elif index_tip.y < landmarks[0].y and middle_tip.y < landmarks[0].y and ring_tip.y > landmarks[0].y and pinky_tip.y > landmarks[0].y:
+
+    if (index_tip.y < index_base.y - 0.1 and middle_tip.y < middle_base.y - 0.1 and
+        ring_tip.y > ring_base.y + 0.1 and pinky_tip.y > pinky_base.y + 0.1):
         return "scissors"
-    else:
-        return None
+
+    return None
 
 def calculate_finger_angles(landmarks):
     angles = []
@@ -55,11 +68,12 @@ GESTURES = ['rock', 'paper', 'scissors']
 
 def run_asl_mode():
     print("ASL Mode: Type a word to spell (A-Z only):")
-    word = input().upper()
+    word = input("Enter a word: ").upper()  
     for letter in word:
-        if 'A' <= letter <= 'Z':
-            ser.write(letter.encode())
-            time.sleep(0.5)
+        if 'A' <= letter <= 'Z':  
+            print(f"Sending letter: {letter}")
+            ser.write(letter.encode()) 
+            time.sleep(1)  
         else:
             print(f"Invalid character skipped: {letter}")
 
@@ -102,91 +116,133 @@ def run_game_mode():
     user_score = 0
     hand_score = 0
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0)  # Open the camera when Game Mode starts
     if not cap.isOpened():
         print("Error: Webcam not detected!")
         return
 
     print("Show your hand gesture to the camera (rock, paper, scissors).")
     while user_score < 3 and hand_score < 3:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Frame capture failed!")
-            break
+        print("Get ready to make your move...")
+        time.sleep(2)  # Give the user 2 seconds to prepare
 
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = hands.process(frame_rgb)
+        print("Recognizing your gesture...")
+        user_choices = []
+        start_time = time.time()
 
-        user_choice = None
-        if result.multi_hand_landmarks:
-            for hand_landmarks in result.multi_hand_landmarks:
-                mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                user_choice = classify_gesture(hand_landmarks.landmark)
+        # Capture frames for 3 seconds to recognize the user's gesture
+        while time.time() - start_time < 3:
+            user_choice = None  # Initialize user_choice
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Frame capture failed!")
+                break
 
-        cv2.putText(frame, "Make your move!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            result = hands.process(frame_rgb)
+
+            if result.multi_hand_landmarks:
+                for hand_landmarks in result.multi_hand_landmarks:
+                    mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                    user_choice = classify_gesture(hand_landmarks.landmark)
+                    if user_choice:
+                        user_choices.append(user_choice)
+
+            cv2.putText(frame, "Recognizing...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.imshow("Game Mode - Rock Paper Scissors", frame)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("Exiting game mode.")
+                cap.release()
+                cv2.destroyAllWindows()
+                return
+
+        # Determine the most common gesture recognized
+        if user_choices:
+            user_choice = max(set(user_choices), key=user_choices.count)
+        else:
+            user_choice = None
+
         if user_choice:
-            cv2.putText(frame, f"Your choice: {user_choice}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            print(f"Your choice: {user_choice}")
+            ser.write(f"USER:{user_choice}\n".encode())  # Send the user's choice to Arduino
+        else:
+            print("Gesture not recognized. Try again!")
+            continue
 
-        cv2.imshow("Game Mode - Rock Paper Scissors", frame)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            print("Exiting game mode.")
-            break
+        # Randomize the hand's choice
+        hand_choice = random.choice(GESTURES)
+        print(f"Hand chose: {hand_choice}")
+        ser.write(f"{hand_choice}\n".encode())  # Send the hand's choice to Arduino
 
-        if user_choice in GESTURES:
-            hand_choice = random.choice(GESTURES)
-            print(f"Hand chose: {hand_choice}")
-            print(f"You chose: {user_choice}")
+        # Determine the winner of the round
+        if user_choice == hand_choice:
+            print("It's a draw!")
+        elif (user_choice == 'rock' and hand_choice == 'scissors') or \
+             (user_choice == 'paper' and hand_choice == 'rock') or \
+             (user_choice == 'scissors' and hand_choice == 'paper'):
+            print("You win this round!")
+            user_score += 1
+        else:
+            print("Hand wins this round!")
+            hand_score += 1
 
-            if user_choice == hand_choice:
-                print("It's a draw!")
-            elif (user_choice == 'rock' and hand_choice == 'scissors') or \
-                 (user_choice == 'paper' and hand_choice == 'rock') or \
-                 (user_choice == 'scissors' and hand_choice == 'paper'):
-                print("You win this round!")
-                user_score += 1
+        # Send the updated scores to the Arduino
+        ser.write(f"SCORE:{user_score},{hand_score}\n".encode())
+
+        # Display the current score
+        print(f"Score: You {user_score} - {hand_score} Hand")
+
+        # Wait for the user to type 'next' to proceed to the next round
+        while True:
+            next_input = input("Type 'next' to start the next round or 'q' to quit: ").strip().lower()
+            if next_input == 'next':
+                break
+            elif next_input == 'q':
+                print("Exiting game mode.")
+                cap.release()
+                cv2.destroyAllWindows()
+                return
             else:
-                print("Hand wins this round!")
-                hand_score += 1
-
-            print(f"Score: You {user_score} - {hand_score} Hand")
-            ser.write(hand_choice.encode())
-            time.sleep(0.5)
+                print("Invalid input. Please type 'next' or 'q'.")
 
     cap.release()
     cv2.destroyAllWindows()
 
+    # Announce the winner
     if user_score == 3:
         print("Congratulations, you won the game!")
     else:
         print("The hand wins the game. Better luck next time!")
 
 try:
-    current_mode = asl_mode
-    while True:
-        if current_mode == asl_mode:
-            run_asl_mode()
-        elif current_mode == mirror_mode:
-            run_mirror_mode()
-        elif current_mode == game_mode:
-            run_game_mode()
+    print("Select a mode:")
+    print("0: ASL Mode")
+    print("1: Mirror Mode")
+    print("2: Game Mode")
 
-        print("\nPress '0' for ASL, '1' for Mirror, '2' for Game, or 'q' to quit:")
-        choice = input()
-        if choice == '0':
-            current_mode = asl_mode
-        elif choice == '1':
-            current_mode = mirror_mode
-        elif choice == '2':
-            current_mode = game_mode
-        elif choice == 'q':
+    while True:
+        mode_input = input("Enter the mode number (0, 1, 2) or 'q' to quit: ").strip()
+
+        if mode_input == 'q':
             print("Exiting program.")
             break
+
+        if mode_input == '0':
+            print("Mode selected: ASL")
+            run_asl_mode()
+        elif mode_input == '1':
+            print("Mode selected: Mirror")
+            run_mirror_mode()
+        elif mode_input == '2':
+            print("Mode selected: Game")
+            run_game_mode()
         else:
-            print("Invalid choice. Try again.")
+            print("Invalid input. Please enter 0, 1, 2, or 'q' to quit.")
 
 except KeyboardInterrupt:
-    print("Program terminated.")
+    print("\nProgram terminated by user.")
 
 finally:
     ser.close()
