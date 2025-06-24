@@ -2,7 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 
 Servo thumb, index, middle, ring, pinky, wrist, base;
-int servoPins[] = {3, 5, 6, 9, 10, 11, 12};
+int servoPins[] = {3, 6, 9, 10, 11, 12};
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
@@ -37,15 +37,18 @@ const int aslAlphabet[26][7] = {
   {150, 0, 0, 150, 150, 0},  //v
   {150, 0, 0, 0, 150, 0},  //w
   {150, 90, 150, 150, 150, 0}, //x
-  {150, 0, 150, 150, 0, 0},  //y
+  {0, 150, 150, 150, 0, 0},  //y
   {180, 0, 180, 180, 180, 90} //z
 };
 
 void moveServos(const int positions[]) {
-    Servo servos[] = {thumb, index, middle, ring, pinky, wrist}; 
-    for (int i = 0; i < 6; i++) {
-        servos[i].write(positions[i]); 
-    }
+    thumb.write(positions[0]);
+    index.write(positions[1]);
+    middle.write(positions[2]);
+    ring.write(positions[3]);
+    pinky.write(positions[4]);
+    wrist.write(positions[5]);
+    delay(1000);
 }
 
 void setup() {
@@ -90,22 +93,27 @@ void loop() {
 
     if (mode == 0) {
         if (Serial.available()) {
-            char letter = Serial.read(); 
-            if (letter >= 'A' && letter <= 'Z') { 
-                int index = letter - 'A'; 
-                moveServos(aslAlphabet[index]); 
-                lcd.clear();
-                lcd.setCursor(0, 0);
-                lcd.print("Spelling: ");
-                lcd.print(letter); 
-            } else {
-                lcd.clear();
-                lcd.setCursor(0, 0);
-                lcd.print("Invalid Letter!");
-                delay(2000);
-                lcd.clear();
-                lcd.print("Mode: ASL");
+            String input = Serial.readStringUntil('\n'); // Read the whole line
+            input.trim();
+            for (int i = 0; i < input.length(); i++) {
+                char letter = toupper(input[i]);
+                if (letter >= 'A' && letter <= 'Z') {
+                    int index = letter - 'A';
+                    moveServos(aslAlphabet[index]);
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("Spelling: ");
+                    lcd.print(letter);
+                    delay(1000); // Hold the letter for 1 second
+
+                    // Move all servos to 0 after each letter
+                    int resetPositions[6] = {0, 0, 0, 0, 0, 0};
+                    moveServos(resetPositions);
+                    delay(500); // Pause before next letter
+                }
             }
+            lcd.clear();
+            lcd.print("Mode: ASL");
         }
     }
 
